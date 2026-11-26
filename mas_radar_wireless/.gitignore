@@ -1,0 +1,59 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Test, coverage, and tool caches
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.pid
+
+# SDR / GNU Radio generated or large runtime artifacts
+*.cfile
+*.bin
+*.iq
+*.dat
+*.raw
+*.wav
+*.complex
+sdr_logs/
+recordings/
+captures/
+
+# FIFO/runtime outputs
+*.fifo
+rmuc_info_tx.fifo
+rmuc_interfere_tx.fifo
+
+# GNU Radio generated Python flowgraph sources
+grc/*.py
+!grc/block_*.py
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.Zone.Identifier
+.idea/
+.vscode/
+
+/records/
+
+# Keep source flow graphs, HTML controls, and docs tracked.

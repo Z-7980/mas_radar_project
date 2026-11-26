@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RMUC2026-NC 调试台</title>
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #161d24; --panel2: #1c252e; --line: #303a44;
+      --text: #e6edf3; --muted: #98a6b3; --green: #3fb950; --blue: #58a6ff;
+      --red: #ff7b72; --yellow: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 14px 20px; background: #151c23; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+    h1 { margin: 0; font-size: 21px; }
+    h2 { margin: 0 0 12px; font-size: 17px; color: var(--blue); }
+    h3 { margin: 12px 0 8px; font-size: 14px; color: var(--muted); }
+    main { display: grid; grid-template-columns: minmax(520px, 610px) minmax(760px, 1fr); gap: 14px 16px; padding: 16px; align-items: stretch; }
+    section, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+    .stack { display: grid; gap: 14px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .grid6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    label { display: block; color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.35; }
+    input, select, button { width: 100%; padding: 8px 9px; margin-top: 4px; border-radius: 6px; border: 1px solid #3d4752; background: #0d1117; color: var(--text); }
+    button { background: #238636; border-color: #2ea043; cursor: pointer; font-weight: 700; }
+    button.secondary { background: #21262d; border-color: #3d444d; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; background: #243140; color: var(--blue); font-size: 12px; border: 1px solid #334254; }
+    .active-card { border-color: rgba(63,185,80,.9); box-shadow: 0 0 0 1px rgba(63,185,80,.28) inset; }
+    .inactive-card { opacity: .42; filter: grayscale(.7); background: #11171d; }
+    .muted-control { opacity: .42; filter: grayscale(.7); }
+    .muted-control input, .muted-control select { pointer-events: none; }
+    .inline-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+    .inline-check input { width: auto; margin: 0; }
+    .mode-tx .rx-area, .mode-rx .tx-area { opacity: .28; filter: grayscale(.9); }
+    .mode-tx .rx-area input, .mode-tx .rx-area select, .mode-tx .rx-area button,
+    .mode-rx .tx-area input, .mode-rx .tx-area select, .mode-rx .tx-area button { pointer-events: none; }
+    .cmd-title { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; color: #dbe7f3; font-weight: 700; margin-bottom: 8px; }
+    .cmd-title span:last-child { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .packet-pause { width: 64px; flex: 0 0 64px; margin: 0; padding: 5px 8px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 7px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; }
+    .updated { background: rgba(63,185,80,.58); color: #fff; }
+    .metric { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+    .metric .value { font-size: 22px; color: var(--green); font-weight: 800; }
+    .metric .label { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .key { color: var(--red); font-size: 27px; font-weight: 800; letter-spacing: 2px; }
+    .tx-panel, .overview-panel, .log-panel { min-height: 420px; display: flex; flex-direction: column; }
+    .rx-top { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(240px, .65fr); gap: 12px; height: 420px; align-items: stretch; }
+    .overview-panel, .log-panel { height: 100%; min-height: 0; overflow: hidden; }
+    .overview-panel { overflow: auto; }
+    .log { flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 12px; background: #0d1117; padding: 10px; border-radius: 6px; border: 1px solid #27313b; }
+    .packet-card { display: flex; flex-direction: column; overflow: hidden; }
+    .cmd-card[data-cmd-card="0x0A06"], .packet-card[data-packet-card="0x0A06"] { min-height: 260px; }
+    .cmd-card[data-cmd-card="0x0A02"], .cmd-card[data-cmd-card="0x0A03"],
+    .packet-card[data-packet-card="0x0A02"], .packet-card[data-packet-card="0x0A03"] { min-height: 320px; }
+    .packet-card[data-packet-card="0x0A05"] { min-height: 400px; }
+    .packet-card .legend { margin: 0 0 8px; }
+    .packet-body { flex: 1; min-height: 92px; overflow: auto; padding-right: 2px; }
+    .packet-group { background: #10161d; border: 1px solid var(--line); border-radius: 8px; padding: 10px; height: 100%; }
+    .packet { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #394653; }
+    .packet.empty { opacity: .25; min-height: 73px; }
+    .packet-head { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+    .byte-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    .byte { display: inline-flex; min-width: 30px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; font-family: Consolas, monospace; font-size: 12px; color: #061019; font-weight: 800; }
+    .b-access { background: #f6c6cc; } .b-header { background: #c8e6b0; } .b-pad { background: #c9d1d9; }
+    .b-sof { background: #ffe082; } .b-len { background: #a5d6a7; } .b-seq { background: #f8bbd0; }
+    .b-crc8 { background: #ffab91; } .b-cmd { background: #80cbc4; } .b-data { background: #81d4fa; } .b-crc16 { background: #ce93d8; }
+    .legend { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+    .legend span { font-size: 12px; color: var(--muted); }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 3px; }
+    .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .status-pill { border: 1px solid var(--line); border-radius: 7px; padding: 7px; background: #111820; font-size: 12px; }
+    .lamp { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; background: #4b5563; box-shadow: 0 0 0 1px #6b7280 inset; }
+    .lamp.green { background: #35d46a; box-shadow: 0 0 10px #35d46a; }
+    .lamp.red { background: #ff4d4d; box-shadow: 0 0 10px #ff4d4d; }
+    .lamp.yellow { background: #ffd166; box-shadow: 0 0 10px #ffd166; }
+    .lamp.off { background: #3b424a; }
+    @media (max-width: 1280px) {
+      main { grid-template-columns: 1fr; }
+      .rx-top { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>RMUC2026-NC 调试台</h1>
+      <div class="hint">发送与接收共用同一调试台；后续 SDR 模式也沿用这套显示界面。</div>
+    </div>
+    <div class="badge" id="mode">mode</div>
+  </header>
+  <main>
+    <section class="tx-panel tx-area">
+      <h2>发送配置</h2>
+      <div class="grid2">
+        <div>
+          <label>选择阵营</label>
+          <select id="txTeam" onchange="markSdrDirty()">
+            <option value="red">红方</option>
+            <option value="blue">蓝方</option>
+          </select>
+        </div>
+        <div>
+          <label>选择发射源</label>
+          <select id="txPrimarySource" onchange="markSdrDirty()">
+            <option value="info">信息波</option>
+            <option value="interfere-1">1级干扰波</option>
+            <option value="interfere-2">2级干扰波</option>
+            <option value="interfere-3">3级干扰波</option>
+          </select>
+        </div>
+      </div>
+      <label class="inline-check"><input id="txSecondEnabled" type="checkbox" onchange="markSdrDirty()">启用第二发射源</label>
+      <label class="inline-check"><input id="randomize" type="checkbox" onchange="markTxDataDirty()">随机变化发送内容</label>
+      <div style="display:none">
+      <label>当前发送源，同时仅一个源发送</label>
+      <select id="source" onchange="markSdrDirty()">
+        <option value="red-info">红方 信息波</option>
+        <option value="red-interfere-1">红方 1级干扰波</option>
+        <option value="red-interfere-2">红方 2级干扰波</option>
+        <option value="red-interfere-3">红方 3级干扰波</option>
+        <option value="blue-info">蓝方 信息波</option>
+        <option value="blue-interfere-1">蓝方 1级干扰波</option>
+        <option value="blue-interfere-2">蓝方 2级干扰波</option>
+        <option value="blue-interfere-3">蓝方 3级干扰波</option>
+      </select>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <div class="metric"><div class="value" id="txFreq">--</div><div class="label">默认源频率 MHz</div></div>
+        <div class="metric"><div class="value" id="txBw">--</div><div class="label">默认源带宽 MHz</div></div>
+        <div class="metric"><div class="value" id="txSens">--</div><div class="label">默认源灵敏度</div></div>
+      </div>
+      <label>默认源功率（-70 ~ -10 dBm）</label>
+      <select id="txPowerSelect" onchange="markSdrDirty()">
+        <option value="-10">-10 dBm</option>
+        <option value="-15">-15 dBm</option>
+        <option value="-20">-20 dBm</option>
+        <option value="-25">-25 dBm</option>
+        <option value="-30">-30 dBm</option>
+        <option value="-35">-35 dBm</option>
+        <option value="-40">-40 dBm</option>
+        <option value="-45">-45 dBm</option>
+        <option value="-50">-50 dBm</option>
+        <option value="-55">-55 dBm</option>
+        <option value="-60">-60 dBm</option>
+        <option value="-65">-65 dBm</option>
+        <option value="-70">-70 dBm</option>
+      </select>
+      <div id="txSecondPowerRow">
+        <label>第二源功率（-70 ~ -10 dBm）</label>
+        <select id="txSecondPowerSelect" onchange="markSdrDirty()">
+          <option value="-10">-10 dBm</option>
+          <option value="-15">-15 dBm</option>
+          <option value="-20">-20 dBm</option>
+          <option value="-25">-25 dBm</option>
+          <option value="-30">-30 dBm</option>
+          <option value="-35">-35 dBm</option>
+          <option value="-40">-40 dBm</option>
+          <option value="-45">-45 dBm</option>
+          <option value="-50">-50 dBm</option>
+          <option value="-55">-55 dBm</option>
+          <option value="-60">-60 dBm</option>
+          <option value="-65">-65 dBm</option>
+          <option value="-70">-70 dBm</option>
+        </select>
+      </div>
+      <div id="txDualView" class="hint" style="margin-top:8px;"></div>
+      <div class="hint" style="margin-top:8px;">启用第二源后，默认源固定为干扰波，第二源固定为信息波。</div>
+    </section>
+
+    <div class="rx-top">
+      <section class="overview-panel rx-area">
+        <h2>接收信息总览</h2>
+        <div class="grid2">
+          <div>
+            <label>选择阵营</label>
+            <select id="rxTeam" onchange="markSdrDirty()">
+              <option value="red">红方</option>
+              <option value="blue">蓝方</option>
+            </select>
+          </div>
+          <div>
+            <label>选择接收源</label>
+            <select id="rxSource" onchange="markSdrDirty()">
+              <option value="1">1级干扰波</option>
+              <option value="2">2级干扰波</option>
+              <option value="3">3级干扰波 + 信息波</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid3" style="display:none">
+          <div>
+            <label>解调模式</label>
+            <select id="rxInterferenceForced" onchange="markSdrDirty()">
+              <option value="red-1">红方 1 级</option>
+              <option value="blue-1">蓝方 1 级</option>
+              <option value="red-2">红方 2 级</option>
+              <option value="blue-2">蓝方 2 级</option>
+              <option value="red-3">红方 3 级</option>
+              <option value="blue-3">蓝方 3 级</option>
+            </select>
+          </div>
+          <div>
+            <label>信息波解调</label>
+            <input id="rxInfoForced" readonly value="仅 3 级模式启用，阵营跟随解调模式">
+          </div>
+          <div>
+            <label>接收策略</label>
+            <input id="rxStrategyView" readonly value="强制选择红/蓝 1~3 级；1/2 级只解干扰波，3 级额外解同阵营信息波">
+          </div>
+        </div>
+        <div class="hint" id="rxSelectionView" style="margin-top:8px;">RX 通道选择等待同步</div>
+        <div class="status-grid" id="rxPowerView"></div>
+        <div>干扰密钥：<span id="key" class="key">------</span></div>
+        <div id="rxDiagView" class="status-grid"></div>
+        <div id="field" class="hint" style="margin-top:8px;">等待场地状态...</div>
+        <table style="margin-top:10px;">
+          <thead><tr><th>机器人</th><th>X</th><th>Y</th><th>HP</th><th>弹量</th><th>回血</th><th>冷却</th><th>防御</th><th>易伤</th><th>攻击</th><th>状态</th></tr></thead>
+          <tbody id="robots"></tbody>
+        </table>
+        <div id="sentryPosture" class="hint" style="margin-top:8px;">哨兵姿态：--</div>
+        <div id="fieldStatusView" class="status-grid"></div>
+      </section>
+      <section class="log-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+          <h2 style="margin:0;">日志</h2>
+        </div>
+        <div id="logs" class="log"></div>
+      </section>
+    </div>
+
+    <div class="card cmd-card tx-area interfere-only" data-cmd-card="0x0A06">
+      <div class="cmd-title"><span>0x0A06 干扰波密钥</span><span>6 位数字/字母 ASCII</span></div>
+      <label><input data-cmd-enabled="0x0A06" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A06</label>
+      <label>密钥</label>
+      <input id="secret" maxlength="6" oninput="markTxDataDirty()">
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A06">
+      <div class="cmd-title"><span>0x0A06 接收空口包</span><span id="packet-title-0A06">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A06" onclick="togglePacketPause('0x0A06', this)">暂停</button></div>
+      <div class="legend"><span><i class="b-access"></i>Access</span><span><i class="b-header"></i>Header</span><span><i class="b-pad"></i>填充</span><span><i class="b-sof"></i>SOF</span><span><i class="b-len"></i>长度</span><span><i class="b-seq"></i>seq</span><span><i class="b-crc8"></i>CRC8</span><span><i class="b-cmd"></i>cmd</span><span><i class="b-data"></i>data</span><span><i class="b-crc16"></i>CRC16</span></div>
+      <div id="packet-0A06" class="packet-body"></div>
+    </section>
+
+    <div class="card cmd-card tx-area info-only" data-cmd-card="0x0A01">
+      <div class="cmd-title"><span>0x0A01 机器人位置</span><span>单位 cm，顺序：英雄、工程、步兵3、步兵4、空中、哨兵</span></div>
+      <label><input data-cmd-enabled="0x0A01" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A01</label>
+      <div id="positionFields" class="grid2"></div>
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A01">
+      <div class="cmd-title"><span>0x0A01 接收空口包</span><span id="packet-title-0A01">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A01" onclick="togglePacketPause('0x0A01', this)">暂停</button></div>
+      <div id="packet-0A01" class="packet-body"></div>
+    </section>
+
+    <div class="card cmd-card tx-area info-only" data-cmd-card="0x0A02">
+      <div class="cmd-title"><span>0x0A02 机器人血量</span><span>英雄、工程、步兵3、步兵4、哨兵；协议保留位自动补 0</span></div>
+      <label><input data-cmd-enabled="0x0A02" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A02</label>
+      <div id="hpFields" class="grid2"></div>
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A02">
+      <div class="cmd-title"><span>0x0A02 接收空口包</span><span id="packet-title-0A02">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A02" onclick="togglePacketPause('0x0A02', this)">暂停</button></div>
+      <div id="packet-0A02" class="packet-body"></div>
+    </section>
+
+    <div class="card cmd-card tx-area info-only" data-cmd-card="0x0A03">
+      <div class="cmd-title"><span>0x0A03 剩余发弹量</span><span>英雄、步兵3、步兵4、空中、哨兵</span></div>
+      <label><input data-cmd-enabled="0x0A03" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A03</label>
+      <div id="ammoFields" class="grid2"></div>
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A03">
+      <div class="cmd-title"><span>0x0A03 接收空口包</span><span id="packet-title-0A03">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A03" onclick="togglePacketPause('0x0A03', this)">暂停</button></div>
+      <div id="packet-0A03" class="packet-body"></div>
+    </section>
+
+    <div class="card cmd-card tx-area info-only" data-cmd-card="0x0A04">
+      <div class="cmd-title"><span>0x0A04 经济与场地状态</span><span>金币和场上增益点状态位</span></div>
+      <label><input data-cmd-enabled="0x0A04" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A04</label>
+      <div class="grid3">
+        <div><label>对方剩余金币</label><input id="remain" type="number" oninput="markTxDataDirty()"></div>
+        <div><label>对方总金币</label><input id="total" type="number" oninput="markTxDataDirty()"></div>
+        <div><label>状态位预览</label><input id="flags" readonly></div>
+      </div>
+      <div id="fieldStatusFields" class="status-grid"></div>
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A04">
+      <div class="cmd-title"><span>0x0A04 接收空口包</span><span id="packet-title-0A04">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A04" onclick="togglePacketPause('0x0A04', this)">暂停</button></div>
+      <div id="packet-0A04" class="packet-body"></div>
+    </section>
+
+    <div class="card cmd-card tx-area info-only" data-cmd-card="0x0A05">
+      <div class="cmd-title"><span>0x0A05 增益状态与哨兵姿态</span><span>每组：回血、冷却、防御、易伤、攻击；另含姿态和主要状态</span></div>
+      <label><input data-cmd-enabled="0x0A05" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">启用 0x0A05</label>
+      <div id="buffFields" class="stack"></div>
+      <div id="robotStatusFields" class="grid3"></div>
+    </div>
+    <section class="packet-card rx-area" data-packet-card="0x0A05">
+      <div class="cmd-title"><span>0x0A05 接收空口包</span><span id="packet-title-0A05">等待解析</span><button class="secondary packet-pause" data-pause-cmd="0x0A05" onclick="togglePacketPause('0x0A05', this)">暂停</button></div>
+      <div id="packet-0A05" class="packet-body"></div>
+    </section>
+  </main>
+<script>
+// ==================== 同步周期配置 ====================
+const TX_DATA_INTERVAL_MS = 100;       // payload 数据同步周期：100ms
+const SDR_CONTROL_INTERVAL_MS = 5000;  // SDR 控制同步周期：5s
+
+// ==================== 脏标记与缓冲区 ====================
+let txDataDirty = false;               // payload 数据是否发生变化
+let sdrControlDirty = false;           // SDR 控制是否发生变化
+let lastTxDataPayload = null;          // 上次发送的 tx-data JSON 字符串
+let lastSdrControlPayload = null;      // 上次发送的 sdr-control JSON 字符串
+let controlStateInitialized = false;   // 前端控制区是否已经用后端初值初始化
+
+// ==================== 页面状态 ====================
+const packetPaused = {};
+const flashSeq = {};
+const flashUntil = {};
+const packetOrder = ['0x0A06','0x0A01','0x0A02','0x0A03','0x0A04','0x0A05'];
+const robots = [
+  ['hero','英雄'], ['eng','工程'], ['inf3','步兵3'], ['inf4','步兵4'], ['aerial','空中'], ['sentry','哨兵']
+];
+const hpNames = [['hero','英雄'], ['eng','工程'], ['inf3','步兵3'], ['inf4','步兵4'], ['sentry','哨兵']];
+const ammoNames = [['hero','英雄'], ['inf3','步兵3'], ['inf4','步兵4'], ['aerial','空中'], ['sentry','哨兵']];
+const buffNames = [['buff_hero','英雄'], ['buff_eng','工程'], ['buff_inf3','步兵3'], ['buff_inf4','步兵4'], ['buff_sentry','哨兵']];
+const buffLabels = ['回血增益','热量冷却增益','防御增益','易伤状态','攻击增益','哨兵姿态'];
+const robotStatusNames = [['hero','英雄'], ['eng','工程'], ['inf3','步兵3'], ['inf4','步兵4'], ['sentry','哨兵']];
+const robotStatusLabels = ['存活', '战亡', '无敌不虚弱', '无敌且虚弱'];
+const fieldItems = [
+  {key:'enemy_supply_zone', label:'bit 0：对方补给区占领状态', type:'binary', bit:0},
+  {key:'enemy_center_highland', label:'bit 1-2：对方中央高地的占领状态', type:'owner', shift:1, allowBoth:false},
+  {key:'enemy_trapezoid_highland', label:'bit 3：对方梯形高地的占领状态', type:'binary', bit:3},
+  {key:'enemy_fortress_buff', label:'bit 4-5：对方堡垒增益点的占领状态', type:'owner', shift:4, allowBoth:true},
+  {key:'enemy_outpost_buff', label:'bit 6-7：对方前哨站增益点的占领状态', type:'owner', shift:6, allowBoth:false},
+  {key:'enemy_base_buff', label:'bit 8：对方基地增益点的占领状态', type:'binary', bit:8},
+  {key:'enemy_fly_slope_front_tunnel', label:'bit 9：靠近对方一侧飞坡前地形跨越增益点（隧道）中心处场地交互模块卡的状态', type:'detect', bit:9},
+  {key:'enemy_fly_slope_back_tunnel', label:'bit 10：靠近对方一侧飞坡后地形跨越增益点（隧道）中心处场地交互模块卡的状态', type:'detect', bit:10},
+  {key:'ally_fly_slope_front_tunnel', label:'bit 11：靠近己方一侧飞坡前地形跨越增益点（隧道）中心处场地交互模块卡的状态', type:'detect', bit:11},
+  {key:'ally_fly_slope_back_tunnel', label:'bit 12：靠近己方一侧飞坡后地形跨越增益点（隧道）中心处场地交互模块卡的状态', type:'detect', bit:12},
+  {key:'enemy_highland_upper', label:'bit 13：对方地形跨越增益点（高地）上部场地交互模块卡的状态', type:'detect', bit:13},
+  {key:'enemy_fly_slope_back', label:'bit 14：对方地形跨越增益点（飞坡）后部场地交互模块卡的状态', type:'detect', bit:14},
+  {key:'enemy_highway_upper', label:'bit 15：对方地形跨越增益点（公路）上部场地交互模块卡的状态', type:'detect', bit:15},
+];
+const rfProfiles = {
+  red: {
+    info: {freq_mhz: 433.2, bandwidth_mhz: 0.54, sensitivity: 0},
+    1: {freq_mhz: 432.2, bandwidth_mhz: 0.94, sensitivity: 0},
+    2: {freq_mhz: 432.5, bandwidth_mhz: 0.86, sensitivity: 0},
+    3: {freq_mhz: 432.8, bandwidth_mhz: 0.25, sensitivity: 0},
+  },
+  blue: {
+    info: {freq_mhz: 433.92, bandwidth_mhz: 0.54, sensitivity: 0},
+    1: {freq_mhz: 434.92, bandwidth_mhz: 0.94, sensitivity: 0},
+    2: {freq_mhz: 434.62, bandwidth_mhz: 0.86, sensitivity: 0},
+    3: {freq_mhz: 434.32, bandwidth_mhz: 0.25, sensitivity: 0},
+  },
+};
+
+// ==================== 脏标记函数 ====================
+function markTxDataDirty() {
+  txDataDirty = true;
+  updateLocalControlView();
+}
+
+function markSdrDirty() {
+  sdrControlDirty = true;
+  // SDR 控制变化时，前端 UI 立即响应（本地预览），但不立即发送
+  updateLocalControlView();
+}
+
+// ==================== 控件生成 ====================
+function buildFields() {
+  document.getElementById('positionFields').innerHTML = robots.map(([id,label], i) =>
+    `<div><label>${label} X 坐标</label><input data-pos="${i}" data-axis="x" type="number" oninput="markTxDataDirty()"></div><div><label>${label} Y 坐标</label><input data-pos="${i}" data-axis="y" type="number" oninput="markTxDataDirty()"></div>`
+  ).join('');
+  document.getElementById('hpFields').innerHTML = hpNames.map(([id,label], i) =>
+    `<div><label>${label} 当前血量</label><input data-hp="${i}" type="number" oninput="markTxDataDirty()"></div>`
+  ).join('');
+  document.getElementById('ammoFields').innerHTML = ammoNames.map(([id,label], i) =>
+    `<div><label>${label} 剩余发弹量</label><input data-ammo="${i}" type="number" oninput="markTxDataDirty()"></div>`
+  ).join('');
+  document.getElementById('buffFields').innerHTML = buffNames.map(([id,label]) => {
+    const count = id === 'buff_sentry' ? 6 : 5;
+    return `<div><h3>${label}</h3><div class="grid6">${Array.from({length:count}, (_, i) =>
+      `<div><label>${buffLabels[i]}</label><input data-buff="${id}" data-buff-idx="${i}" type="number" oninput="markTxDataDirty()"></div>`
+    ).join('')}</div></div>`;
+  }).join('');
+  document.getElementById('robotStatusFields').innerHTML = robotStatusNames.map(([id,label], i) =>
+    `<div><label>${label} 主要状态</label><select data-robot-status="${i}" onchange="markTxDataDirty()">${robotStatusLabels.map((text, value) => `<option value="${value}">${value}：${text}</option>`).join('')}</select></div>`
+  ).join('');
+  document.getElementById('fieldStatusFields').innerHTML = fieldItems.map(item => {
+    if (item.type === 'owner') {
+      const both = item.allowBoth ? '<option value="3">被双方占领</option>' : '<option value="3">保留/未知</option>';
+      return `<div><label>${item.label}</label><select data-field="${item.key}" onchange="markTxDataDirty()"><option value="0">未被占领</option><option value="1">被对方占领</option><option value="2">被己方占领</option>${both}</select></div>`;
+    }
+    const text = item.type === 'detect' ? '已检测到' : '已占领';
+    return `<label class="status-pill"><input data-field="${item.key}" type="checkbox" style="width:auto;margin-right:6px;" onchange="markTxDataDirty()">${item.label}：${text}</label>`;
+  }).join('');
+}
+
+// ==================== 数据收集 ====================
+function splitSource(v) {
+  const p = v.split('-');
+  return {team: p[0], wave_type: p[1] === 'info' ? 'info' : 'interfere', level: p[2] ? Number(p[2]) : 1};
+}
+
+function makeSource(tx) {
+  return tx.wave_type === 'info' ? `${tx.team}-info` : `${tx.team}-interfere-${tx.interference_level}`;
+}
+
+function makePrimarySource(tx) {
+  return tx.wave_type === 'info' ? 'info' : `interfere-${tx.interference_level || 1}`;
+}
+
+function splitPrimarySource(v) {
+  if (v === 'info') return {wave_type: 'info', level: 1};
+  const p = String(v || 'interfere-1').split('-');
+  return {wave_type: 'interfere', level: Number(p[1] || 1)};
+}
+
+function isSecondTxEnabled() {
+  return Boolean(document.getElementById('txSecondEnabled')?.checked);
+}
+
+function currentTxSelection() {
+  const team = document.getElementById('txTeam').value;
+  const primary = splitPrimarySource(document.getElementById('txPrimarySource').value);
+  return {team, wave_type: primary.wave_type, level: primary.level};
+}
+
+function currentPrimaryProfile() {
+  const s = currentTxSelection();
+  const key = s.wave_type === 'info' ? 'info' : s.level;
+  return rfProfiles[s.team][key];
+}
+
+function sensitivityFromBandwidthMhz(bandwidthMhz) {
+  const bandwidthHz = Number(bandwidthMhz) * 1e6;
+  const sampRate = 1e6;
+  const sps = 47;
+  return 1 / (2 * Math.PI * ((bandwidthHz / 2) - (sampRate / sps)) / sampRate);
+}
+
+function gatherTxControl() {
+  const s = currentTxSelection();
+  return {
+    team: s.team,
+    wave_type: s.wave_type,
+    interference_level: s.level,
+    tx_power_dbm: Number(document.getElementById('txPowerSelect').value),
+    second_source_enabled: isSecondTxEnabled(),
+    second_tx_power_dbm: Number(document.getElementById('txSecondPowerSelect').value)
+  };
+}
+
+function gatherTxData() {
+  const positions = Array.from({length:6}, (_, i) => ({
+    x: Number(document.querySelector(`[data-pos="${i}"][data-axis="x"]`).value || 0),
+    y: Number(document.querySelector(`[data-pos="${i}"][data-axis="y"]`).value || 0)
+  }));
+  const hps = Array.from({length:5}, (_, i) => Number(document.querySelector(`[data-hp="${i}"]`).value || 0));
+  const ammo = Array.from({length:5}, (_, i) => Number(document.querySelector(`[data-ammo="${i}"]`).value || 0));
+  const buffs = {};
+  for (const [id] of buffNames) {
+    buffs[id] = Array.from(document.querySelectorAll(`[data-buff="${id}"]`)).sort((a,b)=>Number(a.dataset.buffIdx)-Number(b.dataset.buffIdx)).map(el => Number(el.value || 0));
+  }
+  const status_flags = gatherFieldFlags();
+  const robot_statuses = Array.from({length:5}, (_, i) => Number(document.querySelector(`[data-robot-status="${i}"]`).value || 0));
+  return {
+    randomize: document.getElementById('randomize').checked,
+    enabled_cmds: Object.fromEntries(Array.from(document.querySelectorAll('[data-cmd-enabled]')).map(el => [el.dataset.cmdEnabled, el.checked])),
+    secret_key: document.getElementById('secret').value,
+    positions, hps, ammo, buffs,
+    remain_coins: Number(document.getElementById('remain').value || 0),
+    total_coins: Number(document.getElementById('total').value || 0),
+    status_flags,
+    robot_statuses
+  };
+}
+
+function gatherRxSelection() {
+  const team = document.getElementById('rxTeam').value;
+  const source = document.getElementById('rxSource').value;
+  return {
+    interference_forced: `${team}-${source}`,
+  };
+}
+
+function gatherFieldFlags() {
+  let flags = 0;
+  for (const item of fieldItems) {
+    const el = document.querySelector(`[data-field="${item.key}"]`);
+    if (!el) continue;
+    if (item.type === 'owner') {
+      flags |= (Number(el.value) & 0x03) << item.shift;
+    } else if (el.checked) {
+      flags |= 1 << item.bit;
+    }
+  }
+  document.getElementById('flags').value = '0x' + flags.toString(16).toUpperCase();
+  return flags;
+}
+
+// ==================== 定时同步：Payload 数据（100ms） ====================
+async function syncTxData() {
+  if (!txDataDirty) return;
+  
+  const payload = gatherTxData();
+  const payloadStr = JSON.stringify(payload);
+  
+  // 与上次比较，无变化则跳过
+  if (payloadStr === lastTxDataPayload) {
+    txDataDirty = false;
+    return;
+  }
+  
+  try {
+    await fetch('/api/tx-data', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: payloadStr
+    });
+    lastTxDataPayload = payloadStr;
+    txDataDirty = false;
+  } catch (err) {
+    console.error('tx-data sync failed:', err);
+    // 保持 dirty=true，下次重试
+  }
+}
+
+// ==================== 定时同步：SDR 控制（5s） ====================
+async function syncSdrControl() {
+  const txControl = gatherTxControl();
+  const rxSelection = gatherRxSelection();
+  const payload = {tx: txControl, rx: rxSelection};
+  const payloadStr = JSON.stringify(payload);
+  if (payloadStr === lastSdrControlPayload) {
+    sdrControlDirty = false;
+    return;
+  }
+  
+  try {
+    await fetch('/api/sdr', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: payloadStr
+    });
+    lastSdrControlPayload = payloadStr;
+    sdrControlDirty = false;
+  } catch (err) {
+    console.error('sdr sync failed:', err);
+    sdrControlDirty = true;
+  }
+}
+
+// ==================== UI 更新 ====================
+function sourceChanged(autoSave=false) {
+  void autoSave;
+  updateLocalControlView();
+}
+
+function applyMode(mode) {
+  document.body.classList.toggle('mode-tx', mode === 'tx');
+  document.body.classList.toggle('mode-rx', mode === 'rx');
+}
+
+function togglePacketPause(cmd, button) {
+  packetPaused[cmd] = !packetPaused[cmd];
+  button.textContent = packetPaused[cmd] ? '继续' : '暂停';
+  const card = document.querySelector(`[data-packet-card="${cmd}"]`);
+  if (card) card.classList.toggle('active-card', packetPaused[cmd]);
+}
+
+function paintCards(waveType) {
+  const dual = isSecondTxEnabled();
+  document.querySelectorAll('.cmd-card').forEach(el => {
+    const cmd = el.dataset.cmdCard;
+    const sourceActive = dual ||
+      (waveType === 'info' && el.classList.contains('info-only')) ||
+      (waveType === 'interfere' && el.classList.contains('interfere-only'));
+    const enableBox = document.querySelector(`[data-cmd-enabled="${cmd}"]`);
+    const enabled = enableBox?.checked ?? true;
+    el.classList.toggle('active-card', sourceActive && enabled);
+    el.classList.toggle('inactive-card', !sourceActive || !enabled);
+    if (enableBox) enableBox.disabled = !sourceActive;
+    el.querySelectorAll('input:not([data-cmd-enabled]), select, button').forEach(ctrl => {
+      ctrl.disabled = !sourceActive || !enabled;
+    });
+  });
+}
+
+function updateTxSourceConstraints() {
+  const sourceEl = document.getElementById('txPrimarySource');
+  const dual = isSecondTxEnabled();
+  for (const option of Array.from(sourceEl.options)) {
+    option.disabled = dual && option.value === 'info';
+  }
+  if (dual && sourceEl.value === 'info') {
+    sourceEl.value = 'interfere-1';
+  }
+
+  const secondRow = document.getElementById('txSecondPowerRow');
+  const secondPower = document.getElementById('txSecondPowerSelect');
+  secondRow.classList.toggle('muted-control', !dual);
+  secondPower.disabled = !dual;
+}
+
+function updateTxMetrics() {
+  const profile = currentPrimaryProfile();
+  document.getElementById('txFreq').textContent = profile.freq_mhz;
+  document.getElementById('txBw').textContent = profile.bandwidth_mhz;
+  document.getElementById('txSens').textContent = sensitivityFromBandwidthMhz(profile.bandwidth_mhz).toFixed(4);
+}
+
+function updateRxSelectionViewFromControls() {
+  const team = document.getElementById('rxTeam').value;
+  const level = document.getElementById('rxSource').value;
+  const teamName = team === 'blue' ? '蓝方' : '红方';
+  const infoText = level === '3' ? `信息波支路启用：${teamName}信息波` : '信息波支路关闭：1/2级只解干扰波';
+  document.getElementById('rxSelectionView').textContent =
+    `接收源：${teamName} ${level}级干扰波；${infoText}`;
+}
+
+function updateLocalControlView() {
+  updateTxSourceConstraints();
+  updateTxMetrics();
+
+  const s = currentTxSelection();
+  const dual = isSecondTxEnabled();
+  paintCards(s.wave_type);
+  document.getElementById('txDualView').textContent = dual
+    ? '双源显示：默认源发干扰波，第二源发信息波；两类数据框均可编辑。'
+    : '单源显示：只有当前发射源对应的数据框可编辑。';
+  updateRxSelectionViewFromControls();
+}
+
+function setIfNotActive(el, value, force=false) {
+  if (!el) return;
+  if (force || document.activeElement !== el) el.value = value;
+}
+
+function setCheckedIfNotActive(el, checked, force=false) {
+  if (!el) return;
+  if (force || document.activeElement !== el) el.checked = Boolean(checked);
+}
+
+function syncRxSelection(rx) {
+  if (!rx) return;
+
+  const forced = rx.interference_forced || 'red-1';
+  const current = rx.interference_current || forced;
+  const [forcedTeam, forcedLevel] = String(forced).split('-');
+  setIfNotActive(document.getElementById('rxTeam'), forcedTeam || 'red', true);
+  setIfNotActive(document.getElementById('rxSource'), forcedLevel || '1', true);
+  setIfNotActive(document.getElementById('rxInterferenceForced'), forced, true);
+
+  const [teamText, levelText] = String(current).split('-');
+  const teamName = teamText === 'blue' ? '蓝方' : (teamText === 'red' ? '红方' : '--');
+  const infoEnabled = levelText === '3';
+  const infoText = infoEnabled ? `启用：${teamName}信息波` : '关闭：1/2 级只解干扰波';
+  const strategyText = '强制选择红/蓝 1~3 级；3 级额外解同阵营信息波';
+
+  setIfNotActive(document.getElementById('rxInfoForced'), infoText);
+  setIfNotActive(document.getElementById('rxStrategyView'), strategyText);
+  updateRxSelectionViewFromControls();
+}
+
+function syncTx(tx) {
+  const forcePayload = Boolean(tx.randomize);
+
+  setIfNotActive(document.getElementById('txTeam'), tx.team, true);
+  setIfNotActive(document.getElementById('txPrimarySource'), makePrimarySource(tx), true);
+  setIfNotActive(document.getElementById('source'), makeSource(tx), true);
+  setIfNotActive(document.getElementById('txPowerSelect'), tx.tx_power_dbm, true);
+  setIfNotActive(document.getElementById('txSecondPowerSelect'), tx.second_tx_power_dbm || -60, true);
+  setCheckedIfNotActive(document.getElementById('txSecondEnabled'), tx.second_source_enabled, true);
+  setCheckedIfNotActive(document.getElementById('randomize'), tx.randomize, true);
+
+  for (const [cmd, enabled] of Object.entries(tx.enabled_cmds || {})) {
+    const el = document.querySelector(`[data-cmd-enabled="${cmd}"]`);
+    setCheckedIfNotActive(el, enabled);
+  }
+
+  syncTxPayload(tx, forcePayload);
+  updateLocalControlView();
+}
+
+function syncTxPayload(tx, forcePayload=false) {
+  for (const [cmd, enabled] of Object.entries(tx.enabled_cmds || {})) {
+    const el = document.querySelector(`[data-cmd-enabled="${cmd}"]`);
+    setCheckedIfNotActive(el, enabled, forcePayload);
+  }
+
+  setIfNotActive(document.getElementById('secret'), tx.secret_key, forcePayload);
+  setIfNotActive(document.getElementById('remain'), tx.remain_coins, forcePayload);
+  setIfNotActive(document.getElementById('total'), tx.total_coins, forcePayload);
+  setIfNotActive(
+    document.getElementById('flags'),
+    '0x' + Number(tx.status_flags).toString(16).toUpperCase(),
+    forcePayload
+  );
+
+  syncFieldFlags(Number(tx.status_flags), forcePayload);
+
+  tx.positions.forEach((p, i) => {
+    setIfNotActive(
+      document.querySelector(`[data-pos="${i}"][data-axis="x"]`),
+      p[0],
+      forcePayload
+    );
+    setIfNotActive(
+      document.querySelector(`[data-pos="${i}"][data-axis="y"]`),
+      p[1],
+      forcePayload
+    );
+  });
+
+  tx.hps.forEach((v, i) => {
+    setIfNotActive(document.querySelector(`[data-hp="${i}"]`), v, forcePayload);
+  });
+
+  tx.ammo.forEach((v, i) => {
+    setIfNotActive(document.querySelector(`[data-ammo="${i}"]`), v, forcePayload);
+  });
+
+  for (const [id] of buffNames) {
+    (tx[id] || []).forEach((v, i) => {
+      setIfNotActive(
+        document.querySelector(`[data-buff="${id}"][data-buff-idx="${i}"]`),
+        v,
+        forcePayload
+      );
+    });
+  }
+
+  (tx.robot_statuses || []).forEach((v, i) => {
+    setIfNotActive(document.querySelector(`[data-robot-status="${i}"]`), v, forcePayload);
+  });
+
+  updateLocalControlView();
+}
+
+function syncFieldFlags(flags, force=false) {
+  for (const item of fieldItems) {
+    const el = document.querySelector(`[data-field="${item.key}"]`);
+    if (!el) continue;
+    if (!force && document.activeElement === el) continue;
+
+    if (item.type === 'owner') {
+      el.value = String((flags >> item.shift) & 0x03);
+    } else {
+      el.checked = Boolean((flags >> item.bit) & 1);
+    }
+  }
+}
+
+function cls(label) {
+  return {pad:'b-pad',sof:'b-sof',len:'b-len',seq:'b-seq',crc8:'b-crc8',cmd:'b-cmd',data:'b-data',crc16:'b-crc16'}[label] || 'b-pad';
+}
+
+function syncUpdatedFlashes(updatedSeq) {
+  const now = Date.now();
+  for (const [key, seq] of Object.entries(updatedSeq || {})) {
+    if (flashSeq[key] !== seq) {
+      flashSeq[key] = seq;
+      flashUntil[key] = now + 100;
+    }
+  }
+}
+
+function isUpdated(k) { return Date.now() < (flashUntil[k] || 0) ? 'updated' : ''; }
+function cell(v) { return v === undefined ? '--' : v; }
+
+function renderPacket(packet, idx) {
+  const access = packet.access_hex.split(' ').map(b => `<span class="byte b-access">${b}</span>`).join('');
+  const header = packet.header_hex.split(' ').map(b => `<span class="byte b-header">${b}</span>`).join('');
+  const payload = packet.payload.map(x => `<span class="byte ${cls(x.label)}" title="${x.index}: ${x.label}">${x.hex}</span>`).join('');
+  return `<div class="packet"><div class="packet-head"><span>空口包 ${idx + 1} / ${packet.wave_type}</span><span>${(packet.decoded || []).join(', ') || '分片中'}</span></div><div class="byte-row">${access}${header}${payload}</div></div>`;
+}
+
+function emptyPacket(idx) {
+  return `<div class="packet empty"><div class="packet-head"><span>预留空口包 ${idx + 1}</span><span>等待该包 ID 的分片</span></div></div>`;
+}
+
+function packetDomId(cmd) {
+  return cmd.replace('0x', '');
+}
+
+function renderPacketGroup(cmd, data) {
+  const group = data.packets_by_cmd[cmd];
+  const maxSlots = (data.cmd_max_air_packets || {})[cmd] || 1;
+  const stats = (data.cmd_stats || {})[cmd] || {};
+  const rate = stats.rate_hz === undefined ? '--' : Number(stats.rate_hz).toFixed(1) + ' Hz';
+  const title = document.getElementById('packet-title-' + packetDomId(cmd));
+  if (!group) {
+    if (title) title.textContent = `接收频率 ${rate}，尚未成功解析`;
+    return `<div class="packet-group">${Array.from({length:maxSlots}, (_,i)=>emptyPacket(i)).join('')}</div>`;
+  }
+  const packets = group.air_packets || [];
+  const fillers = Array.from({length: Math.max(0, maxSlots - packets.length)}, (_, i) => emptyPacket(packets.length + i)).join('');
+  const lengthStatus = group.length_valid ? '正常' : '异常';
+  if (title) title.textContent = `接收频率 ${rate}，频点 ${group.frequency_mhz} MHz，包长 ${group.payload_len} B（${lengthStatus}），占用 ${packets.length}/${maxSlots} 个空口包`;
+  return `<div class="packet-group">${packets.map(renderPacket).join('')}${fillers}</div>`;
+}
+
+function lamp(color) { return `<span class="lamp ${color || 'off'}"></span>`; }
+
+function statRate(stats, key) {
+  return Number(((stats || {})[key] || {}).rate_hz || 0).toFixed(1) + ' Hz';
+}
+
+function fmtDb(value) {
+  return value === null || value === undefined ? '--' : Number(value).toFixed(1) + ' dB';
+}
+
+// ==================== 状态轮询（250ms） ====================
+async function refresh(forcePackets=false) {
+  let data;
+  try {
+    const response = await fetch('/api/state');
+    data = await response.json();
+  } catch (err) {
+    console.error('state refresh failed:', err);
+    return;
+  }
+  syncUpdatedFlashes(data.updated_seq || {});
+  document.getElementById('mode').textContent = data.mode;
+  applyMode(data.mode);
+  if (!controlStateInitialized) {
+    syncTx(data.tx);
+    syncRxSelection(data.rx_selection);
+    controlStateInitialized = true;
+  } else {
+    setCheckedIfNotActive(document.getElementById('randomize'), data.tx.randomize, true);
+    if (data.tx.randomize) {
+      syncTxPayload(data.tx, true);
+    }
+    updateLocalControlView();
+  }
+  const keyEl = document.getElementById('key');
+  keyEl.textContent = data.rx.secret_key || '------';
+  keyEl.className = `key ${isUpdated('secret_key')}`;
+  const rxPower = data.rx_power || {};
+  const rxGain = data.rx_gain || {};
+  document.getElementById('rxPowerView').innerHTML = [
+    ['原始通道平均功率', fmtDb(rxPower.raw_peak_db)],
+    ['干扰通道平均功率', fmtDb(rxPower.interfere_avg_density_db)],
+    ['信息通道平均功率', fmtDb(rxPower.info_avg_density_db)],
+    ['RX Gain', rxGain.current_gain === undefined ? '--' : String(rxGain.current_gain)],
+  ].map(([label, value]) => `<div class="status-pill">${label}<br><span class="hint">${value}</span></div>`).join('');
+  const diag = data.rx_diag_stats || {};
+  document.getElementById('rxDiagView').innerHTML = [
+    ['green', '空口帧头成功', statRate(diag, 'air_header_ok')],
+    ['red', '空口帧头失败', statRate(diag, 'air_header_fail')],
+    ['green', 'CRC16 成功', statRate(diag, 'crc16_ok')],
+    ['red', 'CRC16 失败', statRate(diag, 'crc16_fail')],
+  ].map(([color, label, value]) => `<div class="status-pill">${lamp(color)}${label}<br><span class="hint">${value}</span></div>`).join('');
+  const f = data.rx.field || {};
+  document.getElementById('field').innerHTML = `剩余金币 <span class="${isUpdated('field.remain_coins')}">${cell(f.remain_coins)}</span>，总金币 <span class="${isUpdated('field.total_coins')}">${cell(f.total_coins)}</span>，状态位 <span class="${isUpdated('field.status_flags')}">${f.status_flags === undefined ? '--' : '0x' + Number(f.status_flags).toString(16).toUpperCase()}</span>`;
+  document.getElementById('fieldStatusView').innerHTML = (f.status_items || []).map(item =>
+    `<div class="status-pill">${lamp(item.color)}${item.label}<br><span class="hint">${item.text}</span></div>`
+  ).join('');
+  const rxRobots = data.rx.robots || {};
+  document.getElementById('robots').innerHTML = robots.map(([n,label]) => {
+    const r = rxRobots[n] || {};
+    return `<tr><td>${label}</td><td class="${isUpdated(`robots.${n}.x`)}">${cell(r.x)}</td><td class="${isUpdated(`robots.${n}.y`)}">${cell(r.y)}</td><td class="${isUpdated(`robots.${n}.hp`)}">${cell(r.hp)}</td><td class="${isUpdated(`robots.${n}.ammo`)}">${cell(r.ammo)}</td><td class="${isUpdated(`robots.${n}.heal`)}">${cell(r.heal)}</td><td class="${isUpdated(`robots.${n}.cool`)}">${cell(r.cool)}</td><td class="${isUpdated(`robots.${n}.def`)}">${cell(r.def)}</td><td class="${isUpdated(`robots.${n}.vuln`)}">${cell(r.vuln)}</td><td class="${isUpdated(`robots.${n}.atk`)}">${cell(r.atk)}</td><td class="${isUpdated(`robots.${n}.status`)}">${robotStatusLabels[r.status] || cell(r.status)}</td></tr>`;
+  }).join('');
+  const postureMap = {1:'进攻姿态', 2:'防御姿态', 3:'移动姿态', 4:'强化进攻姿态', 5:'强化防御姿态', 6:'强化移动姿态'};
+  const sentryPosture = document.getElementById('sentryPosture');
+  sentryPosture.textContent = '哨兵姿态：' + (postureMap[data.rx.sentry_posture] || cell(data.rx.sentry_posture));
+  sentryPosture.className = `hint ${isUpdated('sentry_posture')}`;
+  document.getElementById('logs').textContent = (data.logs || []).slice(-120).join('\n');
+  packetOrder.forEach(cmd => {
+    if (!packetPaused[cmd]) {
+      const el = document.getElementById('packet-' + packetDomId(cmd));
+      if (el) el.innerHTML = renderPacketGroup(cmd, data);
+    }
+  });
+}
+
+// ==================== 初始化 ====================
+buildFields();
+setInterval(syncTxData, TX_DATA_INTERVAL_MS);       // 100ms payload 同步
+setInterval(syncSdrControl, SDR_CONTROL_INTERVAL_MS);  // 5s SDR 控制同步
+setInterval(refresh, 250);                          // 250ms 状态轮询
+refresh();
+</script>
+</body>
+</html>
